@@ -1,6 +1,7 @@
 #include "../include/Ray.hpp"
 #include <cstdint>
 #include <fstream>
+#include <glm/geometric.hpp>
 #include <iostream>
 
 #define COLOR_RGBA(r, g, b, a)                                                 \
@@ -13,7 +14,7 @@
 /*                                        << 16((uint32_t)(B * 255.9)) << 8) */
 
 glm::vec3 color(const Ray &r);
-bool hit_sphere(const Ray &ray, glm::vec3 center, float r);
+float hit_sphere(const Ray &ray, glm::vec3 center, float r);
 
 const char *file_name = "output/test.ppm";
 const int WIDTH = 640;
@@ -69,21 +70,32 @@ void save_to_ppm(const char *file_name) {
 }
 glm::vec3 color(const Ray &r) {
 
-  if(hit_sphere(r, glm::vec3(0.0f, 0.0f, -1.0), 0.5))
-  {
-    return glm::vec3(1.0f, 0.0f, 0.0f);
+  float t = hit_sphere(r, glm::vec3(0.0f, 0.0f, -1), 0.5);
+
+  if (t > 0) {
+
+    // sphere normal is P-C
+    glm::vec3 N =
+        glm::normalize(r.point_at_parmt(t) - glm::vec3(0.0f, 0.0f, -1));
+
+    return glm::vec3(N.x + 1.0f, N.y + 1.0f, N.z + 1.0f) * 0.5f;
   }
+
   float y = glm::normalize(r.direction()).y;
-  float t = 0.5f * (y + 1.0f);
+  t = 0.5f * (y + 1.0f);
   return glm::vec3(1.0f, 1.0f, 1.0f) * (1.0f - t) +
          (t) * (glm::vec3(0.5f, 0.7f, 1.0f));
 }
-bool hit_sphere(const Ray &ray, glm::vec3 center, float r) {
+float hit_sphere(const Ray &ray, glm::vec3 center, float r) {
   glm::vec3 oc = ray.origin() - center;
   float a = dot(ray.direction(), ray.direction());
 
   float b = 2 * dot(ray.direction(), oc);
   float c = dot(oc, oc) - r * r;
 
-  return (b * b - 4.0 * a * c) > 0;
+  float discriminant = b * b - 4.0f * a * c;
+
+  if (discriminant < 0)
+    return -1.0f;
+  return (-b - sqrt(discriminant)) / 2.0f * a;
 }

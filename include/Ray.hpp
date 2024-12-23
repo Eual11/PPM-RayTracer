@@ -16,7 +16,7 @@ public:
   glm::vec3 origin() const { return A; }
   glm::vec3 direction() const { return B; }
 
-  glm::vec3 point_at_parmt(float t) { return A + t * B; }
+  glm::vec3 point_at_parmt(float t) const { return A + t * B; }
 
   glm::vec3 A; // vector origin
   glm::vec3 B; // vector origin
