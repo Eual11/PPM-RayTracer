@@ -1,24 +1,30 @@
+#include "../include/Camera.hpp"
+#include "../include/Hitable.hpp"
+#include "../include/HitableList.hpp"
 #include "../include/Ray.hpp"
+#include "../include/Sphere.hpp"
+#include <climits>
 #include <cstdint>
+#include <cstdlib>
 #include <fstream>
 #include <glm/geometric.hpp>
 #include <iostream>
+#include <random>
 
+#define WORLD_SIZE 2
 #define COLOR_RGBA(r, g, b, a)                                                 \
   ((((uint32_t)((r) * 255.0f)) & 0xFF) << 24 |                                 \
    (((uint32_t)((g) * 255.0f)) & 0xFF) << 16 |                                 \
    (((uint32_t)((b) * 255.0f)) & 0xFF) << 8 |                                  \
    (((uint32_t)((a) * 255.0f)) & 0xFF))
-/* #define FLOAT_TO_U32(R, G, B) \ */
-/*   ((uint32_t)R * 255.9) << 24) | ((uint32_t)G * 255.9) \ */
-/*                                        << 16((uint32_t)(B * 255.9)) << 8) */
 
-glm::vec3 color(const Ray &r);
+glm::vec3 color(const Ray &r, HitableList *world);
 float hit_sphere(const Ray &ray, glm::vec3 center, float r);
 
 const char *file_name = "output/test.ppm";
 const int WIDTH = 640;
 const int HEIGHT = 320;
+const int SAMPLES = 64;
 
 typedef uint32_t Pixel32;
 
@@ -26,21 +32,44 @@ static Pixel32 IMAGE[WIDTH][HEIGHT];
 void save_to_ppm(const char *file_name);
 int main(void) {
 
-  glm::vec3 origin(0.0f, 0.0f, 0.0f);
-  glm::vec3 H(4.0f, 0.0f, 0.0f); // horizontal direction vector
-  glm::vec3 V(0.0f, 2.0f, 0.0f);
-  glm::vec3 LeftCorner(-2.0f, -1.0f, -1.0f);
+  Hitable *list[WORLD_SIZE] = {nullptr};
+
+  list[0] = new Sphere(glm::vec3(0, 0, -1), 0.5);
+  list[1] = new Sphere(glm::vec3(0, -100, -20), 100.0f);
+
+  HitableList world(list, WORLD_SIZE);
+
+  std::random_device rd;
+
+  std::mt19937 gen(rd());
+
+  std::uniform_real_distribution<> dist(0.0, 1.0f);
+
+  srand(0);
+  Camera cam;
   for (int y = HEIGHT - 1; y >= 0; y--) {
     for (int x = 0; x < WIDTH; x++) {
+      glm::vec3 col = glm::vec3(0.0f);
 
-      float u = (float)(x) / (float)(WIDTH);
-      float v = (float)(y) / (float)(HEIGHT);
-      Ray ray(origin, LeftCorner + u * H + v * V);
-      glm::vec3 col = color(ray);
+      for (int i = 0; i < SAMPLES; i++) {
+
+        float s = ((float)(x) + dist(gen)) / ((float)(WIDTH));
+        float t = ((float)(y) + dist(gen)) / ((float)(HEIGHT));
+        col += color(cam.gen_rays(s, t), &world);
+      }
+      col /= SAMPLES;
+
       IMAGE[x][HEIGHT - 1 - y] = COLOR_RGBA(col.r, col.g, col.b, 1.0);
     }
   }
   save_to_ppm(file_name);
+
+  for (unsigned int i = 0; i < WORLD_SIZE; i++) {
+    if (list[i]) {
+      free(list[i]);
+    }
+  }
+  std::cout << "memory cleared\n";
   return 0;
 }
 void save_to_ppm(const char *file_name) {
@@ -68,17 +97,14 @@ void save_to_ppm(const char *file_name) {
     std::cout << "File " << file_name << " Saved\n";
   }
 }
-glm::vec3 color(const Ray &r) {
+glm::vec3 color(const Ray &r, HitableList *world) {
 
-  float t = hit_sphere(r, glm::vec3(0.0f, 0.0f, -1), 0.5);
+  hit_record record;
+  float t;
+  if (world->hit(r, 0.0f, FLT_MAX, record)) {
 
-  if (t > 0) {
-
-    // sphere normal is P-C
-    glm::vec3 N =
-        glm::normalize(r.point_at_parmt(t) - glm::vec3(0.0f, 0.0f, -1));
-
-    return glm::vec3(N.x + 1.0f, N.y + 1.0f, N.z + 1.0f) * 0.5f;
+    return 0.5f * glm ::vec3(record.normal.x + 1.0f, record.normal.y + 1.0f,
+                             record.normal.z + 1.0f);
   }
 
   float y = glm::normalize(r.direction()).y;
@@ -97,5 +123,5 @@ float hit_sphere(const Ray &ray, glm::vec3 center, float r) {
 
   if (discriminant < 0)
     return -1.0f;
-  return (-b - sqrt(discriminant)) / 2.0f * a;
+  return (-b - sqrt(discriminant)) / (2.0f * a);
 }
