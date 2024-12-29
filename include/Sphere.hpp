@@ -6,8 +6,10 @@ class Sphere : public Hitable {
 public:
   glm::vec3 center;
   float radius;
+  Material *material = nullptr;
 
-  Sphere(const glm::vec3 &cen, float r) : center(cen), radius(r) {}
+  Sphere(const glm::vec3 &cen, float r, Material *mat)
+      : center(cen), radius(r), material(mat) {}
   Sphere()
       : center(0.0f), radius(1.0f) {
   } // Default sphere at the origin with radius 1.0
@@ -30,6 +32,7 @@ public:
       record.t = temp;
       record.p = r.point_at_parmt(record.t);
       record.normal = (record.p - center) / radius;
+      record.mat = material;
 
       return true;
     }
@@ -40,6 +43,7 @@ public:
       record.t = temp;
       record.p = r.point_at_parmt(record.t);
       record.normal = (record.p - center) / radius;
+      record.mat = material;
       return true;
     }
     return false;
