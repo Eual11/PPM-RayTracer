@@ -1,9 +1,12 @@
 #include "../include/Camera.hpp"
 #include "../include/Hitable.hpp"
 #include "../include/HitableList.hpp"
+#include "../include/Material.hpp"
 #include "../include/Ray.hpp"
 #include "../include/Sphere.hpp"
-#include <climits>
+#include "../include/Utils.hpp"
+#include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <fstream>
@@ -11,39 +14,45 @@
 #include <iostream>
 #include <random>
 
-#define WORLD_SIZE 2
+#define PI acosf(-1)
+
+#define WORLD_SIZE 4
 #define COLOR_RGBA(r, g, b, a)                                                 \
   ((((uint32_t)((r) * 255.0f)) & 0xFF) << 24 |                                 \
    (((uint32_t)((g) * 255.0f)) & 0xFF) << 16 |                                 \
    (((uint32_t)((b) * 255.0f)) & 0xFF) << 8 |                                  \
    (((uint32_t)((a) * 255.0f)) & 0xFF))
 
-glm::vec3 color(const Ray &r, HitableList *world);
+glm::vec3 color(const Ray &r, HitableList *world, int depth = 0);
 float hit_sphere(const Ray &ray, glm::vec3 center, float r);
 
 const char *file_name = "output/test.ppm";
 const int WIDTH = 640;
 const int HEIGHT = 320;
-const int SAMPLES = 64;
+const int SAMPLES = 32;
 
 typedef uint32_t Pixel32;
 
 static Pixel32 IMAGE[WIDTH][HEIGHT];
 void save_to_ppm(const char *file_name);
 int main(void) {
+  std::random_device rd; // random number generator
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> dist(0.0f, 1.0f);
+
+  auto start = std::chrono::high_resolution_clock::now();
 
   Hitable *list[WORLD_SIZE] = {nullptr};
 
-  list[0] = new Sphere(glm::vec3(0, 0, -1), 0.5);
-  list[1] = new Sphere(glm::vec3(0, -100, -20), 100.0f);
-
-  HitableList world(list, WORLD_SIZE);
-
-  std::random_device rd;
-
-  std::mt19937 gen(rd());
-
-  std::uniform_real_distribution<> dist(0.0, 1.0f);
+  list[0] = new Sphere(glm::vec3(0, 0, -1), 0.5,
+                       new Lambertian(glm::vec3(0.2, 0.2, 0.9)));
+  list[1] = new Sphere(glm::vec3(0, -100.5, -1), 100,
+                       new Lambertian(glm::vec3(0.8, 0.8, 0.0)));
+  list[2] =
+      new Sphere(glm::vec3(1, 0, -1), 0.5, new Metal(glm::vec3(0.8, 0.6, 0.2)));
+  list[3] = new Sphere(glm::vec3(-1, 0, -1), 0.5,
+                       new Metal(glm::vec3(0.8, 0.8, 0.8)));
+  HitableList *world = new HitableList(list, WORLD_SIZE);
 
   srand(0);
   Camera cam;
@@ -55,13 +64,20 @@ int main(void) {
 
         float s = ((float)(x) + dist(gen)) / ((float)(WIDTH));
         float t = ((float)(y) + dist(gen)) / ((float)(HEIGHT));
-        col += color(cam.gen_rays(s, t), &world);
+        col += color(cam.gen_rays(s, t), world, 50);
       }
       col /= SAMPLES;
 
+      // gamma encoding
+      col = glm::vec3(sqrt(col[0]), sqrt(col[1]), sqrt(col[2]));
       IMAGE[x][HEIGHT - 1 - y] = COLOR_RGBA(col.r, col.g, col.b, 1.0);
     }
   }
+  auto elapsed = std::chrono::high_resolution_clock::now() - start;
+
+  std::cout << "Time to Render: "
+            << std::chrono::duration<float>(elapsed).count() << std::endl;
+  ;
   save_to_ppm(file_name);
 
   for (unsigned int i = 0; i < WORLD_SIZE; i++) {
@@ -97,14 +113,19 @@ void save_to_ppm(const char *file_name) {
     std::cout << "File " << file_name << " Saved\n";
   }
 }
-glm::vec3 color(const Ray &r, HitableList *world) {
+glm::vec3 color(const Ray &r, HitableList *world, int depth) {
 
   hit_record record;
   float t;
-  if (world->hit(r, 0.0f, FLT_MAX, record)) {
+  if (world->hit(r, 0.001f, FLT_MAX, record)) {
+    glm::vec3 attenuation;
+    Ray scattered;
 
-    return 0.5f * glm ::vec3(record.normal.x + 1.0f, record.normal.y + 1.0f,
-                             record.normal.z + 1.0f);
+    if (depth > 0 && record.mat &&
+        record.mat->scatter(r, record, attenuation, scattered)) {
+      return attenuation * color(scattered, world, depth - 1);
+    } else
+      return glm::vec3(0.0f);
   }
 
   float y = glm::normalize(r.direction()).y;
