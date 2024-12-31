@@ -12,59 +12,49 @@
 #include <fstream>
 #include <glm/geometric.hpp>
 #include <iostream>
-#include <random>
 
-#define PI acosf(-1)
-
-#define WORLD_SIZE 4
 #define COLOR_RGBA(r, g, b, a)                                                 \
   ((((uint32_t)((r) * 255.0f)) & 0xFF) << 24 |                                 \
    (((uint32_t)((g) * 255.0f)) & 0xFF) << 16 |                                 \
    (((uint32_t)((b) * 255.0f)) & 0xFF) << 8 |                                  \
    (((uint32_t)((a) * 255.0f)) & 0xFF))
 
-glm::vec3 color(const Ray &r, HitableList *world, int depth = 0);
+glm::vec3 color(const Ray &r, Hitable *world, int depth = 0);
 float hit_sphere(const Ray &ray, glm::vec3 center, float r);
 
 const char *file_name = "output/test.ppm";
-const int WIDTH = 640;
-const int HEIGHT = 320;
-const int SAMPLES = 32;
+const int WIDTH = 1280;
+const int HEIGHT = 720;
 
 typedef uint32_t Pixel32;
 
 static Pixel32 IMAGE[WIDTH][HEIGHT];
 void save_to_ppm(const char *file_name);
+Hitable *random_scene();
 int main(void) {
-  std::random_device rd; // random number generator
-  std::mt19937 gen(rd());
-  std::uniform_int_distribution<> dist(0.0f, 1.0f);
+
+  int depth;
+  int SAMPLES;
+  std::cout << "Depth: ";
+  std::cin >> depth;
+  std::cout << "Samples: ";
+  std::cin >> SAMPLES;
 
   auto start = std::chrono::high_resolution_clock::now();
 
-  Hitable *list[WORLD_SIZE] = {nullptr};
+  Hitable *world = random_scene();
 
-  list[0] = new Sphere(glm::vec3(0, 0, -1), 0.5,
-                       new Lambertian(glm::vec3(0.2, 0.2, 0.9)));
-  list[1] = new Sphere(glm::vec3(0, -100.5, -1), 100,
-                       new Lambertian(glm::vec3(0.8, 0.8, 0.0)));
-  list[2] =
-      new Sphere(glm::vec3(1, 0, -1), 0.5, new Metal(glm::vec3(0.8, 0.6, 0.2)));
-  list[3] = new Sphere(glm::vec3(-1, 0, -1), 0.5,
-                       new Metal(glm::vec3(0.8, 0.8, 0.8)));
-  HitableList *world = new HitableList(list, WORLD_SIZE);
-
-  srand(0);
-  Camera cam;
+  Camera cam(glm::vec3(13.0f, 2.0f, 3), glm::vec3(0.0f, 0.0f, 0.0f),
+             glm::vec3(0.0f, 1.0f, 0.0f), 20.0f, float(WIDTH) / float(HEIGHT));
   for (int y = HEIGHT - 1; y >= 0; y--) {
     for (int x = 0; x < WIDTH; x++) {
       glm::vec3 col = glm::vec3(0.0f);
 
       for (int i = 0; i < SAMPLES; i++) {
 
-        float s = ((float)(x) + dist(gen)) / ((float)(WIDTH));
-        float t = ((float)(y) + dist(gen)) / ((float)(HEIGHT));
-        col += color(cam.gen_rays(s, t), world, 50);
+        float s = ((float)(x) + rng.random_float()) / ((float)(WIDTH));
+        float t = ((float)(y) + rng.random_float()) / ((float)(HEIGHT));
+        col += color(cam.gen_rays(s, t), world, depth);
       }
       col /= SAMPLES;
 
@@ -77,15 +67,8 @@ int main(void) {
 
   std::cout << "Time to Render: "
             << std::chrono::duration<float>(elapsed).count() << std::endl;
-  ;
   save_to_ppm(file_name);
 
-  for (unsigned int i = 0; i < WORLD_SIZE; i++) {
-    if (list[i]) {
-      free(list[i]);
-    }
-  }
-  std::cout << "memory cleared\n";
   return 0;
 }
 void save_to_ppm(const char *file_name) {
@@ -113,7 +96,7 @@ void save_to_ppm(const char *file_name) {
     std::cout << "File " << file_name << " Saved\n";
   }
 }
-glm::vec3 color(const Ray &r, HitableList *world, int depth) {
+glm::vec3 color(const Ray &r, Hitable *world, int depth) {
 
   hit_record record;
   float t;
@@ -146,3 +129,38 @@ float hit_sphere(const Ray &ray, glm::vec3 center, float r) {
     return -1.0f;
   return (-b - sqrt(discriminant)) / (2.0f * a);
 }
+Hitable *random_scene() {
+  using namespace glm;
+  int n = 500;
+  Hitable **list = new Hitable *[n + 1];
+  list[0] =
+      new Sphere(vec3(0, -1000, 0), 1000, new Lambertian(vec3(0.5, 0.5, 0.5)));
+  int i = 1;
+  for (int a = -11; a < 11; a++) {
+    for (int b = -11; b < 11; b++) {
+      float choose_mat = rng.random_float();
+      vec3 center(a + 0.9 * rng.random_float(), 0.2, b + 0.9 * random_double());
+      if ((center - vec3(4, 0.2, 0)).length() > 0.9) {
+        if (choose_mat < 0.8) { // diffuse
+          list[i++] = new Sphere(
+              center, 0.2,
+              new Lambertian(vec3(random_double() * random_double(),
+                                  random_double() * random_double(),
+                                  random_double() * random_double())));
+        } else if (choose_mat < 0.95 and false) { // metal
+          list[i++] = new Sphere(center, 0.2, new Metal(vec3(0.5, 0.5, 0.5)));
+        } else { // glass
+          list[i++] = new Sphere(center, 0.2, new Dielectric(1.5));
+        }
+      }
+    }
+  }
+
+  list[i++] = new Sphere(vec3(0, 1, 0), 1.0, new Dielectric(1.5));
+  list[i++] =
+      new Sphere(vec3(-4, 1, 0), 1.0, new Lambertian(vec3(0.4, 0.2, 0.1)));
+  list[i++] =
+      new Sphere(vec3(4, 1, 0), 1.0, new Metal(vec3(0.7, 0.6, 0.5), 0.0));
+
+  return new HitableList(list, i);
+};
