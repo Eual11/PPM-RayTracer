@@ -1,18 +1,34 @@
 #ifndef CAMERA_HPP
 #define CAMERA_HPP
 #include "Ray.hpp"
+#include "Utils.hpp"
+#include <cmath>
 #include <glm/glm.hpp>
 #include <glm/vec3.hpp>
-
 class Camera {
 
 public:
-  Camera() {
+  Camera(glm::vec3 pos, glm::vec3 look_at, glm::vec3 up, float fov,
+         float aspect) {
 
-    origin = glm::vec3(0.0f, 0.0f, 0.0f);
-    H = glm::vec3(4.0f, 0.0f, 0.0f); // horizontal direction vector
-    V = glm::vec3(0.0f, 2.0f, 0.0f);
-    LeftCorner = glm::vec3(-2.0f, -1.0f, -1.0f);
+    // camera position
+
+    glm::vec3 u, v, w;
+    origin = pos;
+
+    w = glm::normalize(pos - look_at);
+    u = glm::normalize(glm::cross(up, w));
+    v = (glm::cross(w, u));
+
+    float theta = (fov * PI) / 180.0f;
+    float half_h = tan(theta / 2.0f);
+
+    float half_w = aspect * half_h;
+
+    H = 2.0f * half_w * u; // horizontal direction vector
+    V = 2.0f * half_h * v;
+
+    LeftCorner = origin - u * half_w - v * half_h - w;
   }
   glm::vec3 origin;
   glm::vec3 H; // horizontal direction vector

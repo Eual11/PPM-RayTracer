@@ -20,7 +20,7 @@ public:
 
   bool scatter(const Ray &r_in, const hit_record &rec, glm::vec3 &attenuation,
                Ray &scattered) const override {
-
+    (void)(r_in);
     glm::vec3 target = rec.normal + rec.p + random_point_in_unit_sphere();
 
     scattered = Ray(rec.p, target - rec.p);
@@ -54,4 +54,61 @@ public:
     return dot(scattered.direction(), rec.normal) > 0.0;
   }
 };
+
+class Dielectric : public Material {
+
+public:
+  Dielectric(float f) : ref_index(f) {}
+  bool scatter(const Ray &r_in, const hit_record &rec, glm::vec3 &attenuation,
+               Ray &scattered) const override {
+
+    glm::vec3 r_dir = glm::normalize(r_in.direction());
+
+    glm::vec3 out_normal;
+    glm::vec3 refracted = glm::vec3(0.0f);
+    float theta;
+    float eta;
+    float reflect_prop;
+
+    // refleced ray
+    glm::vec3 reflected = reflect(r_dir, rec.normal);
+
+    attenuation = glm::vec3(1.0f);
+
+    // checking for incident ray's direction
+
+    if (glm::dot(r_dir, rec.normal) > 0.0f) {
+      // ray is from the inside the surface of object object
+
+      out_normal = -rec.normal;
+      eta = ref_index;
+      theta = (glm::dot(r_in.direction(), rec.normal) * ref_index) /
+              glm::length(r_in.direction());
+    } else {
+      out_normal = rec.normal;
+      eta = 1.0f / ref_index;
+      theta = -(glm::dot(r_in.direction(), rec.normal)) /
+              glm::length(glm::length(r_in.direction()));
+    }
+
+    if (refract(r_dir, out_normal, eta, refracted)) {
+
+      reflect_prop = schlick(theta, ref_index);
+    } else {
+      reflect_prop = 1.0f;
+    }
+
+    if (rng.random_float() < reflect_prop) {
+      scattered = Ray(rec.p, reflected);
+    } else {
+      scattered = Ray(rec.p, refracted);
+    }
+
+    return true;
+  }
+
+  float ref_index;
+};
+float random_double() { return rng.random_float(); }
+
 #endif
