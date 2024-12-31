@@ -147,7 +147,7 @@ Hitable *random_scene() {
               new Lambertian(vec3(random_double() * random_double(),
                                   random_double() * random_double(),
                                   random_double() * random_double())));
-        } else if (choose_mat < 0.95 and false) { // metal
+        } else if (choose_mat < 0.95) { // metal
           list[i++] = new Sphere(center, 0.2, new Metal(vec3(0.5, 0.5, 0.5)));
         } else { // glass
           list[i++] = new Sphere(center, 0.2, new Dielectric(1.5));
